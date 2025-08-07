@@ -13,6 +13,8 @@ import { ClientTable } from "@/components/ClientTable";
 import { DomainList } from "@/components/DomainList";
 import { Domain } from "@/types/Domain";
 import { ClientNavbar } from "@/components/ClientNavbar";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 type Client = {
   client_id: number;
@@ -23,46 +25,62 @@ type Client = {
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [search, setSearch] = useState("");
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenInput, setTokenInput] = useState("");
+  const [showTokenModal, setShowTokenModal] = useState(false);
+
   const filteredClients = clients.filter((c) =>
     `${c.ip} ${c.name}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  const TOKEN =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRoIjp0cnVlLCJpYXQiOjE3NTQ0ODc2MjAsImV4cCI6NDkxMDI0NzYyMH0.sP5AqM5nCx3ScK1lyePXvFdp_UL-ceE_Fg-7gQWd1V8";
-
   const fetchClients = async () => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/clients`, {
-      headers: {
-        Authorization: `Bearer ${TOKEN}`,
-      },
-    });
-    const data = await res.json();
-    setClients(data);
-    setLoading(false);
+    if (!token) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/clients`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setClients(data);
+    } catch {
+      console.error("Erro ao buscar clientes");
+    }
   };
 
   useEffect(() => {
-    fetchClients();
+    const stored = localStorage.getItem("token");
+    if (!stored) {
+      setShowTokenModal(true);
+    } else {
+      setToken(stored);
+    }
   }, []);
 
+  useEffect(() => {
+    if (token) fetchClients();
+  }, [token]);
+
+  const handleSaveToken = () => {
+    const trimmed = tokenInput.trim();
+    if (!trimmed) return;
+    localStorage.setItem("token", trimmed);
+    setToken(trimmed);
+    setShowTokenModal(false);
+  };
+
   const handleSaveName = async (ip: string, name: string) => {
-    if (!name) return;
+    if (!name || !token) return;
     await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/set-name`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ ip, name }),
     });
     await fetchClients();
   };
-
-  if (loading)
-    return <div className="p-4 text-muted-foreground">Carregando...</div>;
 
   return (
     <div>
@@ -91,6 +109,23 @@ export default function ClientsPage() {
             </DialogHeader>
 
             {selectedClient && <DomainList domains={selectedClient.domains} />}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showTokenModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Informe o token</DialogTitle>
+            </DialogHeader>
+            <Input
+              placeholder="Token de acesso"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              className="mt-2"
+            />
+            <Button className="mt-4 w-full" onClick={handleSaveToken}>
+              Salvar Token
+            </Button>
           </DialogContent>
         </Dialog>
       </div>
